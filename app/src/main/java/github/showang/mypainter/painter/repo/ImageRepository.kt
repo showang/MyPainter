@@ -1,4 +1,4 @@
-package github.showang.mypainter.painter
+package github.showang.mypainter.painter.repo
 
 import android.content.Context
 import android.graphics.Bitmap

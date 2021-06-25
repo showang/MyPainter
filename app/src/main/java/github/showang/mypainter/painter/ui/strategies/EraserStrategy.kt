@@ -1,7 +1,8 @@
-package github.showang.mypainter.painter.ui
+package github.showang.mypainter.painter.ui.strategies
 
 import android.graphics.*
 import github.showang.mypainter.painter.model.PathShape
+import github.showang.mypainter.painter.ui.PaintingStrategy
 
 class EraserStrategy(
     private val store: PaintingStrategy.ShapeStore,
