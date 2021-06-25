@@ -58,6 +58,7 @@ dependencies {
     implementation 'com.github.showang:Recyct:0.0.5'
 
     testImplementation 'junit:junit:4.+'
+    testImplementation 'io.mockk:mockk:1.10.5'
     androidTestImplementation 'androidx.test.ext:junit:1.1.2'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
 }

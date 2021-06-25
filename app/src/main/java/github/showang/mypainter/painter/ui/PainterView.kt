@@ -18,10 +18,10 @@ class PainterView(
         setLayerType(LAYER_TYPE_SOFTWARE, null)
     }
 
-    private var mMode: PaintingMode? = null
+    private var mStrategy: PaintingStrategy? = null
 
-    fun init(mode: PaintingMode) {
-        mMode = mode
+    fun update(strategy: PaintingStrategy) {
+        mStrategy = strategy
     }
 
     fun updateBackground(bitmap: Bitmap?) {
@@ -32,9 +32,9 @@ class PainterView(
     override fun onTouchEvent(event: MotionEvent?): Boolean {
         event?.run {
             when (action) {
-                ACTION_DOWN -> mMode?.onActionDown(x, y)
-                ACTION_MOVE -> mMode?.onActionMove(x, y)
-                ACTION_UP, ACTION_CANCEL -> mMode?.onActionUp(x, y)
+                ACTION_DOWN -> mStrategy?.onActionDown(x, y)
+                ACTION_MOVE -> mStrategy?.onActionMove(x, y)
+                ACTION_UP, ACTION_CANCEL -> mStrategy?.onActionUp(x, y)
                 else -> null
             }?.run {
                 invalidate()
@@ -47,7 +47,7 @@ class PainterView(
 
     override fun onDraw(canvas: Canvas?) {
         super.onDraw(canvas)
-        val mode = mMode ?: return
+        val mode = mStrategy ?: return
         canvas?.let(mode::onDraw)
     }
 }
