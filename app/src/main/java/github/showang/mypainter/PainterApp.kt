@@ -1,10 +1,10 @@
 package github.showang.mypainter
 
 import android.app.Application
-import github.showang.mypainter.painter.ImageRepository
+import github.showang.mypainter.painter.repo.ImageRepository
 import github.showang.mypainter.painter.model.ShapeStoreManager
-import github.showang.mypainter.painter.viewmodel.PaintingModeFactory
-import github.showang.mypainter.painter.viewmodel.PaintingViewModel
+import github.showang.mypainter.painter.ui.PaintingStrategyFactory
+import github.showang.mypainter.painter.viewmodel.PainterViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.core.context.startKoin
@@ -19,10 +19,10 @@ class PainterApp : Application() {
             modules(listOf(
                 module {
                     single { ImageRepository(get()) }
-                    single { PaintingModeFactory(get()) }
+                    single { PaintingStrategyFactory(get()) }
                     single { ShapeStoreManager() }
 
-                    viewModel { PaintingViewModel(get(), get(), get()) }
+                    viewModel { PainterViewModel(get(), get()) }
                 }
             ))
         }

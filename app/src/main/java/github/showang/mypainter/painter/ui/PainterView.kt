@@ -8,6 +8,7 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.MotionEvent.*
 import android.view.View
+import github.showang.mypainter.painter.viewmodel.PainterViewModel
 
 class PainterView(
     context: Context,
@@ -19,9 +20,14 @@ class PainterView(
     }
 
     private var mStrategy: PaintingStrategy? = null
+    private lateinit var mFactory: PaintingStrategyFactory
 
-    fun update(strategy: PaintingStrategy) {
-        mStrategy = strategy
+    fun init(strategyFactory: PaintingStrategyFactory) {
+        mFactory = strategyFactory
+    }
+
+    fun update(mode: PainterViewModel.Mode) {
+        mStrategy = mFactory.create(mode)
     }
 
     fun updateBackground(bitmap: Bitmap?) {

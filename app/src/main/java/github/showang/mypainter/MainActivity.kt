@@ -12,29 +12,73 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import github.showang.mypainter.databinding.ActivityMainBinding
-import github.showang.mypainter.painter.viewmodel.PaintingViewModel
+import github.showang.mypainter.painter.ui.PaintingStrategyFactory
+import github.showang.mypainter.painter.viewmodel.PainterViewEvent
+import github.showang.mypainter.painter.viewmodel.PainterViewModel
+import github.showang.mypainter.painter.viewmodel.PainterViewState
+import github.showang.mypainter.transtate.core.Transform
+import github.showang.mypainter.transtate.core.ViewState
 import me.showang.recyct.RecyctAdapter
 import me.showang.recyct.RecyctViewHolder
 import me.showang.recyct.items.RecyctItemBase
+import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
-class MainActivity : AppCompatActivity(), PaintingViewModel.ViewDelegate {
+class MainActivity : AppCompatActivity() {
 
     private val binding by lazy { ActivityMainBinding.inflate(layoutInflater) }
     private val lifecycleOwner by lazy { { lifecycle } }
-    private val viewModel: PaintingViewModel by viewModel()
+    private val strategyFactory: PaintingStrategyFactory by inject()
+    private val viewModel: PainterViewModel by viewModel()
     private val modeButtons: MutableList<ImageView> = mutableListOf()
     private var adapter: RecyctAdapter? = null
 
+    private var selectedColor: Int = Color.BLACK
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(binding.apply {
-            initPainterView()
-            initColorRecyclerView()
-            initModeSelectedButtons()
-            initActionButtons()
-        }.root)
-        viewModel.delegate = this
+        setContentView(binding.root)
+        viewModel.observeTransformation(lifecycleOwner, ::initViewBy, ::updateViewBy)
+    }
+
+    private fun initViewBy(state: ViewState) {
+        when (state) {
+            is PainterViewState.Initializing -> {
+                selectedColor = state.selectedColor
+                binding.initAll(state.currentMode, state.supportedColors)
+            }
+            is PainterViewState.Drawing -> { //Note: This case can't be reached, just works when using Fragment (ViewDestroyed).
+                selectedColor = state.selectedColor
+                binding.run {
+                    initAll(state.currentMode, state.supportedColors)
+                    painterView.updateBackground(state.baseBitmap)
+                }
+            }
+        }
+    }
+
+    private fun updateViewBy(transform: Transform) {
+        when (val event = transform.byEvent) {
+            is PainterViewEvent.ChangeMode -> event.run {
+                binding.painterView.update(newMode)
+                updateModeButtons(newMode)
+            }
+            is PainterViewEvent.ShapeQueueChanged ->
+                updateActionButtons(!event.canRedo, !event.canUndo)
+            is PainterViewEvent.PerformRedraw -> binding.painterView.invalidate()
+            is PainterViewEvent.ColorChanged -> {
+                selectedColor = event.selectedColor
+                (transform.newState as? PainterViewState.Drawing)?.run {
+                    binding.painterView.update(currentMode)
+                }
+                adapter?.run {
+                    notifyItemChanged(event.selectedIndex)
+                    notifyItemChanged(event.unSelectedIndex)
+                }
+            }
+            is PainterViewEvent.SaveSnapshotCompleted -> onSaveCompleted(event.isSuccess)
+            is PainterViewEvent.SnapshotLoaded -> binding.painterView.updateBackground(event.bitmap)
+        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -47,21 +91,27 @@ class MainActivity : AppCompatActivity(), PaintingViewModel.ViewDelegate {
         return super.onOptionsItemSelected(item)
     }
 
-    override fun onDestroy() {
-        viewModel.delegate = null
-        super.onDestroy()
+    private fun ActivityMainBinding.initAll(
+        mode: PainterViewModel.Mode,
+        supportedColors: List<Int>
+    ) {
+        initPainterView(mode)
+        initColorRecyclerView(supportedColors)
+        initModeSelectedButtons()
+        initActionButtons()
+        updateModeButtons(mode)
     }
 
-    private fun ActivityMainBinding.initPainterView() {
-        viewModel.strategyLiveData.observe(lifecycleOwner, painterView::update)
-        viewModel.baseBitmapLiveData.observe(lifecycleOwner, painterView::updateBackground)
+    private fun ActivityMainBinding.initPainterView(mode: PainterViewModel.Mode?) {
+        painterView.init(strategyFactory)
+        mode?.let(painterView::update)
     }
 
-    private fun ActivityMainBinding.initColorRecyclerView() {
-        colorRecycler.adapter = RecyctAdapter(viewModel.supportedColorList).apply {
-            register(ColorItem(viewModel::selectedColor)) { data, _ ->
+    private fun ActivityMainBinding.initColorRecyclerView(colors: List<Int>) {
+        colorRecycler.adapter = RecyctAdapter(colors).apply {
+            register(ColorItem { selectedColor }) { data, _ ->
                 val colorInt = (data as? Int) ?: return@register
-                viewModel.selectColor(colorInt)
+                viewModel.changeColor(colorInt, selectedColor)
             }
             adapter = this
         }
@@ -70,43 +120,26 @@ class MainActivity : AppCompatActivity(), PaintingViewModel.ViewDelegate {
     private fun ActivityMainBinding.initModeSelectedButtons() {
         listOf(
             pencilModeButton.apply {
-                setOnClickListener { viewModel.pencilMode() }
+                setOnClickListener { viewModel.pencilMode(selectedColor) }
             },
             eraserModeButton.apply {
                 setOnClickListener { viewModel.eraserMode() }
             }
         ).let(modeButtons::addAll)
-        viewModel.modeLiveData.observe(lifecycleOwner, ::updateModeButtons)
     }
 
     private fun ActivityMainBinding.initActionButtons() {
         undoButton.setOnClickListener { viewModel.undo() }
         redoButton.setOnClickListener { viewModel.redo() }
-        updateActionButtons()
+        updateActionButtons(isTopMost = true, isBottom = true)
     }
 
-    private fun ActivityMainBinding.updateActionButtons(
-        isTopMost: Boolean = true,
-        isBottom: Boolean = true
-    ) {
+    private fun updateActionButtons(isTopMost: Boolean, isBottom: Boolean) = binding.run {
         redoButton.run { setColorFilter(if (isTopMost) disableColor else enableColor) }
         undoButton.run { setColorFilter(if (isBottom) disableColor else enableColor) }
     }
 
-    override fun requirePainterDraw() {
-        binding.painterView.invalidate()
-    }
-
-    override fun onShapeQueueChanged(isTopMost: Boolean, isBottom: Boolean) = binding.run {
-        updateActionButtons(isTopMost, isBottom)
-    }
-
-    override fun onColorUpdated(selectedIndex: Int, unSelectedIndex: Int) {
-        adapter?.notifyItemChanged(selectedIndex)
-        adapter?.notifyItemChanged(unSelectedIndex)
-    }
-
-    override fun onSaveCompleted(isSuccess: Boolean) {
+    private fun onSaveCompleted(isSuccess: Boolean) {
         Toast.makeText(
             this,
             if (isSuccess) "Save snapshot success." else "Save snapshot fail.",
@@ -114,13 +147,11 @@ class MainActivity : AppCompatActivity(), PaintingViewModel.ViewDelegate {
         ).show()
     }
 
-    private fun updateModeButtons(mode: PaintingViewModel.Mode) = binding.run {
-        modeButtons.forEach {
-            it.setColorFilter(disableColor)
-        }
+    private fun updateModeButtons(mode: PainterViewModel.Mode) = binding.run {
+        modeButtons.forEach { it.setColorFilter(disableColor) }
         when (mode) {
-            is PaintingViewModel.Mode.Eraser -> eraserModeButton.clearColorFilter()
-            is PaintingViewModel.Mode.Pencil -> pencilModeButton.clearColorFilter()
+            is PainterViewModel.Mode.Eraser -> eraserModeButton.clearColorFilter()
+            is PainterViewModel.Mode.Pencil -> pencilModeButton.clearColorFilter()
         }
     }
 

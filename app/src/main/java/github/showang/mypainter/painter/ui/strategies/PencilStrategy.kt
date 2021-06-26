@@ -1,4 +1,4 @@
-package github.showang.mypainter.painter.ui
+package github.showang.mypainter.painter.ui.strategies
 
 import android.graphics.Canvas
 import android.graphics.Color
@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import androidx.annotation.ColorInt
 import github.showang.mypainter.painter.model.PathShape
+import github.showang.mypainter.painter.ui.PaintingStrategy
 
 class PencilStrategy(
     private val store: PaintingStrategy.ShapeStore,
@@ -19,14 +20,6 @@ class PencilStrategy(
     }
 
     private lateinit var currentPath: Path
-
-    fun updateColor(inColor: Int) {
-        paint = Paint().apply {
-            color = inColor
-            style = Paint.Style.STROKE
-            strokeWidth = 10f
-        }
-    }
 
     override fun onDraw(canvas: Canvas) {
         store.availableShapes.forEach { it.draw(canvas) }
